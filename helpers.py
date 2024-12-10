@@ -1,6 +1,6 @@
 import pandas as pd
 import numpy as np
-
+from datetime import datetime, time
 
 DIRECTION_MAPPING = {
     "in": 1,
@@ -9,36 +9,56 @@ DIRECTION_MAPPING = {
 
 INTERSECTIONS_ROUTES = {
     "Broadway": [89, 101],
-    "mtauburn": [71, 73],
-    "s_mass_ave": [1],
+    "Belmont_Mt. Auburn": [71, 73],
 }
 
 CORRIDORS = {
     # Broadway
-    "2703,2705,2709": "89_inbound",
-    "5303,2705,2709": "101_inbound",
-    "2722,2725,2729": "101_89_outbound",
+    "2703-2709": "89_inbound",
+    "5303-2709": "101_inbound",
+    "2722-2729": "101_89_outbound",
     # Mt. Auburn
-    "2117,2066,2068,2076": "73_inbound",
-    "2062,2066,2068,2076": "71_inbound",
-    "2076,2026,2028,2118": "73_outbound",
-    "2076,2026,2028,2032": "71_outbound",
+    "2117-2076": "73_inbound",
+    "2062-2076": "71_inbound",
+    "2076-2118": "73_outbound",
+    "2076-2032": "71_outbound",
 }
 
 
-def assign_period(row):
-    if row["year"] < 2019:
-        return "before"
-    elif row["year"] == 2019:
-        if row["seasonal_period"] < 2:
+def assign_evaluation_period(row, intersection):
+
+    if intersection == "Broadway":
+        if row["tripdate"] < "2019-11-01":
             return "before"
-        elif row["seasonal_period"] == 2:
+        else:
+            return "after"
+
+    elif intersection == "Belmont_Mt. Auburn":
+        if row["tripdate"] < "2018-11-01":
+            return "before"
+        else:
             return "after"
     else:
-        return "after"
+        return None
 
 
-def get_corridor_data(intersection_raw_avl, selected_direction, selected_route):
+def assign_tod_period(row):
+    dt = row["start_time"]
+    if time(7, 30) <= dt.time() <= time(9, 30):
+        return "AM Peak"
+    elif time(12, 00) <= dt.time() <= time(14, 00):
+        return "Midday"
+    if time(16, 30) <= dt.time() <= time(18, 30):
+        return "PM Peak"
+
+
+def get_corridor_data(
+    selected_intersection,
+    intersection_raw_avl,
+    selected_direction,
+    selected_route,
+    selected_tod,
+):
 
     filtered_raw_avl = intersection_raw_avl[
         (intersection_raw_avl["dir"] == DIRECTION_MAPPING[selected_direction])
@@ -47,16 +67,26 @@ def get_corridor_data(intersection_raw_avl, selected_direction, selected_route):
     filtered_raw_avl["actstoptime"] = pd.to_datetime(filtered_raw_avl["actstoptime"])
     filtered_raw_avl["tripid"] = filtered_raw_avl["trip"].astype(str)
 
-    filtered_trips = filtered_raw_avl.groupby(
-        ["tripid", "tripdate", "year", "seasonal_period", "dir"]
-    ).filter(lambda group: group["stopid"].nunique() == 3)
+    # filtered_trips = filtered_raw_avl.groupby(
+    #     ["tripid", "tripdate", "year", "seasonal_period", "dir"]
+    # ).filter(lambda group: group["stopid"].nunique() == 3)
 
     by_trip = (
-        filtered_trips.groupby(["tripid", "tripdate", "year", "seasonal_period", "dir"])
+        filtered_raw_avl.groupby(
+            ["tripid", "tripdate", "year", "seasonal_period", "dir"]
+        )
         .agg(
             start_time=("actstoptime", "min"),
             end_time=("actstoptime", "max"),
             stopid_sequence=("stopid", lambda x: ",".join(map(str, pd.unique(x)))),
+            first_stop_id=(
+                "actstoptime",
+                lambda x: filtered_raw_avl.loc[x.idxmin(), "stopid"],
+            ),
+            last_stop_id=(
+                "actstoptime",
+                lambda x: filtered_raw_avl.loc[x.idxmax(), "stopid"],
+            ),
         )
         .reset_index()
     )
@@ -64,10 +94,24 @@ def get_corridor_data(intersection_raw_avl, selected_direction, selected_route):
     by_trip["runtime"] = (
         pd.to_datetime(by_trip["end_time"]) - pd.to_datetime(by_trip["start_time"])
     ).dt.total_seconds()
-    by_trip["period"] = by_trip.apply(assign_period, axis=1)
+    by_trip["evaluation_period"] = by_trip.apply(
+        lambda row: assign_evaluation_period(row, selected_intersection), axis=1
+    )
+    by_trip["tod"] = by_trip.apply(lambda row: assign_tod_period(row), axis=1)
+    by_trip["stopid_sequence"] = (
+        by_trip["first_stop_id"].astype(str) + "-" + by_trip["last_stop_id"].astype(str)
+    )
+
     by_trip["corridor"] = by_trip["stopid_sequence"].map(CORRIDORS)
 
-    return by_trip
+    print(by_trip["tod"].unique())
+    print("selected tod", selected_tod)
+
+    by_trip_filtered = by_trip[
+        (by_trip["tod"] == selected_tod) & (by_trip["corridor"].notnull())
+    ]
+
+    return by_trip_filtered
 
 
 def calculate_time_diff(avl_stop_observations):
@@ -103,7 +147,7 @@ def aggregate_data_by_corridor(stop_data_filtered):
 
     print(stop_data_filtered["runtime"].head())
     by_corridor = (
-        stop_data_filtered.groupby(["period", "dir"])
+        stop_data_filtered.groupby(["evaluation_period", "dir"])
         .agg(
             median_runtime=("runtime", "median"),
             mean_runtime=("runtime", "mean"),
@@ -112,6 +156,12 @@ def aggregate_data_by_corridor(stop_data_filtered):
                 "runtime",
                 lambda x: (
                     np.percentile(x.dropna(), 5) if len(x.dropna()) > 0 else np.nan
+                ),
+            ),
+            worst_case_runtime=(
+                "runtime",
+                lambda x: (
+                    np.percentile(x.dropna(), 95) if len(x.dropna()) > 0 else np.nan
                 ),
             ),
             # stopid_sequence=("stopid", lambda x: ",".join(map(str, pd.unique(x)))),
