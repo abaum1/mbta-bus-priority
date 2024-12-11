@@ -68,7 +68,9 @@ filtered_routes = helpers.INTERSECTIONS_ROUTES[selected_intersection]
 selected_route = st.sidebar.selectbox("Select Route:", options=filtered_routes)
 
 
-avl_data_for_intersection = pd.read_csv(f"data/processed/{selected_intersection}.csv")
+avl_data_for_intersection = pd.read_csv(
+    f"data/processed_data/{selected_intersection}.csv"
+)
 
 complete_trips_filtered = helpers.get_corridor_data(
     selected_intersection,
