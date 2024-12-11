@@ -12,7 +12,7 @@ for route in ["89", "101"]:
 broadway_df = pd.concat(broadway_allroutes_data)
 
 broadway_df_processed = helpers.calculate_time_diff(broadway_df)
-broadway_df_processed.to_csv("data/processed/broadway.csv", index=False)
+broadway_df_processed.to_csv("processed_data/Broadway.csv", index=False)
 
 mtauburn_allroutes_data = []
 for route in ["71", "73"]:
@@ -24,4 +24,4 @@ for route in ["71", "73"]:
 mtauburn_df = pd.concat(mtauburn_allroutes_data)
 
 mtauburn_df_processed = helpers.calculate_time_diff(mtauburn_df)
-mtauburn_df_processed.to_csv("data/processed/Belmont_Mt. Auburn.csv", index=False)
+mtauburn_df_processed.to_csv("processed_data/Belmont_Mt. Auburn.csv", index=False)
