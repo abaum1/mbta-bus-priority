@@ -17,13 +17,14 @@ Several data processing steps are needed to generate meaningful analysis from th
 2. Headway is calculated as the difference in seconds between observations at the same stop for sequential trips on the same 3. day.
 3. Coefficient of Variation (CV) of headway, a common metric for quantifying headway reliability for a given route, direction and time period is calculated according to the following formula:
 
-\[
-CV = \frac{\sigma}{\mu}
-\]
+**Coefficient of Variation (CV):**
 
-where:
-- \( \sigma \) = standard deviation of headways
-- \( \mu \) = mean of headways
+\( CV = \frac{\sigma}{\mu} \)
+
+Where:
+- \( \sigma \) is the standard deviation of headways.
+- \( \mu \) is the mean of headways.
+
 
 4. An additional corridor-level dataset was created from the stop-level dataset that computes running times in each direction over the entire route corridor affected by the TSP infrastructure. If the first and last stop of the corridor is not observed in the avl for that trip, the trip is eliminated from the data.
 
