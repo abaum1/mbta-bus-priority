@@ -19,11 +19,11 @@ Several data processing steps are needed to generate meaningful analysis from th
 
 **Coefficient of Variation (CV):**
 
-\( CV = \frac{\sigma}{\mu} \)
+CV = sigma/mu
 
 Where:
-- \( \sigma \) is the standard deviation of headways.
-- \( \mu \) is the mean of headways.
+- sigma is the standard deviation of headways.
+- mu is the mean of headways.
 
 
 4. An additional corridor-level dataset was created from the stop-level dataset that computes running times in each direction over the entire route corridor affected by the TSP infrastructure. If the first and last stop of the corridor is not observed in the avl for that trip, the trip is eliminated from the data.
@@ -49,6 +49,13 @@ Median Running Times (in seconds) By Corridor, AM Peak
 
 ##### Implications of Peak Travel Time Savings on the Mt. Auburn St. Corridor
 
+The full cycle time C is calculated as: C = t_1 + r_1 + t_2 + r_2. Travel time savings reduce t_1 and t_2, leading to a shorter cycle time (C). Shorter cycle time means that the number of busses required during peak period is diminished, since:
+
+peak busses = C/headway
+
+If headway remains constant and C is reduced, the number of peak busses is reduced. Alternatively, if the number of peak busses is held constant, headways can be reduced. Reducing the number of peak busses can free up capital and labor hours for use elsewhere i te system, perhaps reducing the headways on another route. Reducing the scheduled headway generally provides a better level of service for the rider, and increases reliability. 
+
+Travel time savings in the Mt. Auburn St. corridor present an opportunity for the MBTA to revise Routes 71 and 73 schedules. Shortened cycle times can reduce peak bus requirements, optimize recovery times, and allow for increased service frequency or cost savings. However, more significant analysis should be done using data from the entire system to substantially investigate these tradeoffs.
 
 #### Future Work
 This project was time constrained, but with additional resources I would have added the following:
