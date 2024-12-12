@@ -33,16 +33,17 @@ where:
 The application at https://mbta-bus-priority-eval.streamlit.app/ can be used to evaluate the infrastucture changes to stop and corridor level running times, as well as stop level coefficient of variation of headway. The filters on the left hand panel can be used to see the data at different time periods.
 
 Median Running Times (in seconds) By Corridor, AM Peak
-| Route, Direction | Median Runtime (Before) | Median Runtime (After) | 
-|------------|------------|------------|------------|
-| 89, inbound| 402 | 339 |
-| 89, outbound| 297 | 240 | 
-| 101, inbound| 416 | 342 | 
-| 101, outbound| 267| 221 | 
-| 71, inbound| 904 | 629| 
-| 71, outbound| 615 | 589| 
-| 73, inbound| 925 | 635 | 
-| 73, outbound| 574 | 563| 
+| Route, Direction | Median Runtime (Before) | Median Runtime (After) |
+|-------------------|--------------------------|-------------------------|
+| 89, inbound      | 402                      | 339                     |
+| 89, outbound     | 297                      | 240                     |
+| 101, inbound     | 416                      | 342                     |
+| 101, outbound    | 267                      | 221                     |
+| 71, inbound      | 904                      | 629                     |
+| 71, outbound     | 615                      | 589                     |
+| 73, inbound      | 925                      | 635                     |
+| 73, outbound     | 574                      | 563                     |
+
 
 
 ##### Implications of Peak Travel Time Savings on the Mt. Auburn St. Corridor
