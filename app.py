@@ -14,7 +14,7 @@ def create_runtime_chart(df):
             x=df["best_case_runtime"],
             name="Best Case Runtime",
             orientation="h",
-            marker_color="blue",
+            marker_color="green",
         )
     )
 
@@ -24,7 +24,7 @@ def create_runtime_chart(df):
             x=df["median_runtime"] - df["best_case_runtime"],
             name="Variable Runtime",
             orientation="h",
-            marker_color="orange",
+            marker_color="purple",
         )
     )
 
@@ -70,19 +70,76 @@ selected_route = st.sidebar.selectbox("Select Route:", options=filtered_routes)
 
 avl_data_for_intersection = pd.read_csv(f"processed_data/{selected_intersection}.csv")
 
-complete_trips_filtered = helpers.get_corridor_data(
-    selected_intersection,
-    avl_data_for_intersection,
-    selected_direction,
-    selected_route,
-    selected_tod,
+
+avl_data_filtered = helpers.filter_data_by_tod_route_direction(
+    avl_data_for_intersection, selected_route, selected_direction, selected_tod
 )
 
-corridor_aggregated = helpers.aggregate_data_by_corridor(complete_trips_filtered)
-# st.dataframe(complete_trips_filtered.head(10))
-# st.dataframe(corridor_aggregated.head(10))
 
-if not complete_trips_filtered.empty:
+# calculate CoV Hwy
+result = (
+    avl_data_filtered.groupby(
+        [
+            "evaluation_period",
+            "stopid",
+        ]
+    )["headway"]
+    .apply(helpers.calculate_cv)
+    .reset_index(name="hwy_cv")
+)
+
+
+if not result.empty:
+
+    result_nonan = result.dropna(subset=["hwy_cv"], inplace=False)
+    result_nonan["stopid"] = result_nonan["stopid"].astype(str)
+
+    result["stopid"] = pd.Categorical(
+        result["stopid"],
+        categories=helpers.STOP_SEQUENCES[selected_intersection][selected_route][
+            selected_direction
+        ],
+        ordered=True,
+    )
+
+    fig = px.scatter(
+        result_nonan,
+        x="hwy_cv",
+        y="stopid",
+        color="evaluation_period",
+        color_discrete_map={"before": "blue", "after": "red"},
+        labels={"cov_hwy": "Coefficient of Variation (CV)", "stopid": "Stop ID"},
+        title="Scatterplot of CV vs Stop ID",
+    )
+
+    fig.update_traces(marker=dict(size=12, opacity=0.6))
+
+    fig.update_layout(
+        yaxis=dict(
+            title="Stop ID",
+            tickvals=result_nonan["stopid"].unique(),
+            ticktext=helpers.STOP_SEQUENCES[selected_intersection][selected_route][
+                selected_direction
+            ],
+        ),
+        height=600,
+        width=800,
+    )
+
+    st.plotly_chart(fig)
+
+else:
+    st.warning("No data available for the selected filters.")
+
+
+complete_corridors = helpers.get_corridor_data(
+    avl_data_filtered,
+)
+
+
+corridor_aggregated = helpers.aggregate_data_by_corridor(complete_corridors)
+
+if not complete_corridors.empty:
 
     hover_columns = [
         "runtime",
@@ -94,11 +151,12 @@ if not complete_trips_filtered.empty:
     ]
 
     fig = px.scatter(
-        complete_trips_filtered,
+        complete_corridors,
         x="runtime",
         y="evaluation_period",
         hover_data=hover_columns,
         color="evaluation_period",
+        color_discrete_map={"before": "blue", "after": "red"},
     )
 
     fig.update_traces(marker=dict(size=12, opacity=0.6))

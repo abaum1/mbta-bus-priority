@@ -53,7 +53,6 @@ def calculate_cv(headways):
     Calculate the coefficient of variation (CV) of headways for a given stopid over a time period.
     """
 
-    # filtered_stop_records = filtered_stop_records.sort_values("actstoptime")
     mean_headway = headways.mean()
     std_headway = headways.std()
     cv = std_headway / mean_headway if mean_headway > 0 else float("nan")
@@ -178,39 +177,8 @@ def aggregate_data_by_corridor(stop_data_filtered):
                     np.percentile(x.dropna(), 95) if len(x.dropna()) > 0 else np.nan
                 ),
             ),
-            # stopid_sequence=("stopid", lambda x: ",".join(map(str, pd.unique(x)))),
         )
         .reset_index()
     )
 
     return by_corridor
-
-
-def classify_headways(df, actual_col, scheduled_col):
-    """
-    Classifies headways as bunched, on-time, or gapped.
-
-    Parameters:
-        df (pd.DataFrame): DataFrame containing actual and scheduled headways.
-        actual_col (str): Column name for actual headways.
-        scheduled_col (str): Column name for scheduled headways.
-
-    Returns:
-        pd.DataFrame: The original DataFrame with a new column `status` added.
-    """
-
-    def classify_row(row):
-        if row[actual_col] < 0.5 * row[scheduled_col]:
-            return "bunched"
-        elif row[actual_col] > 1.5 * row[scheduled_col]:
-            return "gapped"
-        else:
-            return "on-time"
-
-    df["status"] = df.apply(classify_row, axis=1)
-    return df
-
-
-# Example usage:
-# df = pd.DataFrame({'actual_headway': [...], 'scheduled_headway': [...]})
-# df = classify_headways(df, actual_col='actual_headway', scheduled_col='scheduled_headway')
