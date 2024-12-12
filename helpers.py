@@ -1,15 +1,38 @@
 import pandas as pd
 import numpy as np
-from datetime import datetime, time
 
+# NOTE: this is reverse of GTFS but consistent with AVL data and excel reference provided
 DIRECTION_MAPPING = {
-    "in": 1,
-    "out": 0,
+    "in": 0,
+    "out": 1,
 }
 
 INTERSECTIONS_ROUTES = {
     "Broadway": [89, 101],
     "Belmont_Mt. Auburn": [71, 73],
+}
+
+STOP_SEQUENCES = {
+    "Broadway": {
+        89: {
+            "in": ["2703", "2705", "2709"],
+            "out": ["2722", "2725", "2729"],
+        },
+        101: {
+            "in": ["5303", "2705", "2709"],
+            "out": ["2722", "2725", "2729"],
+        },
+    },
+    "Belmont_Mt. Auburn": {
+        71: {
+            "in": ["2062", "2066", "2068", "2076"],
+            "out": ["2076", "2026", "2028", "2032"],
+        },
+        73: {
+            "in": ["2117", "2066", "2068", "2076"],
+            "out": ["2076", "2026", "2028", "2118"],
+        },
+    },
 }
 
 CORRIDORS = {
@@ -25,55 +48,54 @@ CORRIDORS = {
 }
 
 
-def assign_evaluation_period(row, intersection):
+def calculate_cv(headways):
+    """
+    Calculate the coefficient of variation (CV) of headways for a given stopid over a time period.
+    """
 
-    if intersection == "Broadway":
-        if row["tripdate"] < "2019-11-01":
-            return "before"
-        else:
-            return "after"
+    # filtered_stop_records = filtered_stop_records.sort_values("actstoptime")
+    mean_headway = headways.mean()
+    std_headway = headways.std()
+    cv = std_headway / mean_headway if mean_headway > 0 else float("nan")
 
-    elif intersection == "Belmont_Mt. Auburn":
-        if row["tripdate"] < "2018-11-01":
-            return "before"
-        else:
-            return "after"
-    else:
-        return None
+    return cv
 
 
-def assign_tod_period(row):
-    dt = row["start_time"]
-    if time(7, 30) <= dt.time() <= time(9, 30):
-        return "AM Peak"
-    elif time(12, 00) <= dt.time() <= time(14, 00):
-        return "Midday"
-    if time(16, 30) <= dt.time() <= time(18, 30):
-        return "PM Peak"
+def filter_data_by_tod_route_direction(
+    avl_data, selected_route, selected_direction, selected_tod
+):
+    filtered_raw_avl = avl_data[
+        (avl_data["dir"] == DIRECTION_MAPPING[selected_direction])
+        & (avl_data["route"] == selected_route)
+        & (avl_data["tod"] == selected_tod)
+    ]
+
+    return filtered_raw_avl
+
+
+def compute_headway(avl_stop_observations):
+    avl_stop_observations.sort_values(by=["stopid", "actstoptime"], inplace=True)
 
 
 def get_corridor_data(
-    selected_intersection,
     intersection_raw_avl,
-    selected_direction,
-    selected_route,
-    selected_tod,
 ):
 
-    filtered_raw_avl = intersection_raw_avl[
-        (intersection_raw_avl["dir"] == DIRECTION_MAPPING[selected_direction])
-        & (intersection_raw_avl["route"] == selected_route)
-    ]
-    filtered_raw_avl["actstoptime"] = pd.to_datetime(filtered_raw_avl["actstoptime"])
-    filtered_raw_avl["tripid"] = filtered_raw_avl["trip"].astype(str)
-
-    # filtered_trips = filtered_raw_avl.groupby(
-    #     ["tripid", "tripdate", "year", "seasonal_period", "dir"]
-    # ).filter(lambda group: group["stopid"].nunique() == 3)
+    intersection_raw_avl["actstoptime"] = pd.to_datetime(
+        intersection_raw_avl["actstoptime"]
+    )
+    intersection_raw_avl["tripid"] = intersection_raw_avl["trip"].astype(str)
 
     by_trip = (
-        filtered_raw_avl.groupby(
-            ["tripid", "tripdate", "year", "seasonal_period", "dir"]
+        intersection_raw_avl.groupby(
+            [
+                "tripid",
+                "tripdate",
+                "year",
+                "seasonal_period",
+                "dir",
+                "evaluation_period",
+            ]
         )
         .agg(
             start_time=("actstoptime", "min"),
@@ -81,11 +103,11 @@ def get_corridor_data(
             stopid_sequence=("stopid", lambda x: ",".join(map(str, pd.unique(x)))),
             first_stop_id=(
                 "actstoptime",
-                lambda x: filtered_raw_avl.loc[x.idxmin(), "stopid"],
+                lambda x: intersection_raw_avl.loc[x.idxmin(), "stopid"],
             ),
             last_stop_id=(
                 "actstoptime",
-                lambda x: filtered_raw_avl.loc[x.idxmax(), "stopid"],
+                lambda x: intersection_raw_avl.loc[x.idxmax(), "stopid"],
             ),
         )
         .reset_index()
@@ -94,22 +116,13 @@ def get_corridor_data(
     by_trip["runtime"] = (
         pd.to_datetime(by_trip["end_time"]) - pd.to_datetime(by_trip["start_time"])
     ).dt.total_seconds()
-    by_trip["evaluation_period"] = by_trip.apply(
-        lambda row: assign_evaluation_period(row, selected_intersection), axis=1
-    )
-    by_trip["tod"] = by_trip.apply(lambda row: assign_tod_period(row), axis=1)
     by_trip["stopid_sequence"] = (
         by_trip["first_stop_id"].astype(str) + "-" + by_trip["last_stop_id"].astype(str)
     )
 
     by_trip["corridor"] = by_trip["stopid_sequence"].map(CORRIDORS)
 
-    print(by_trip["tod"].unique())
-    print("selected tod", selected_tod)
-
-    by_trip_filtered = by_trip[
-        (by_trip["tod"] == selected_tod) & (by_trip["corridor"].notnull())
-    ]
+    by_trip_filtered = by_trip[by_trip["corridor"].notnull()]
 
     return by_trip_filtered
 
@@ -145,7 +158,8 @@ def calculate_time_diff(avl_stop_observations):
 
 def aggregate_data_by_corridor(stop_data_filtered):
 
-    print(stop_data_filtered["runtime"].head())
+    print("COLUMNS", stop_data_filtered.columns)
+
     by_corridor = (
         stop_data_filtered.groupby(["evaluation_period", "dir"])
         .agg(
@@ -170,3 +184,33 @@ def aggregate_data_by_corridor(stop_data_filtered):
     )
 
     return by_corridor
+
+
+def classify_headways(df, actual_col, scheduled_col):
+    """
+    Classifies headways as bunched, on-time, or gapped.
+
+    Parameters:
+        df (pd.DataFrame): DataFrame containing actual and scheduled headways.
+        actual_col (str): Column name for actual headways.
+        scheduled_col (str): Column name for scheduled headways.
+
+    Returns:
+        pd.DataFrame: The original DataFrame with a new column `status` added.
+    """
+
+    def classify_row(row):
+        if row[actual_col] < 0.5 * row[scheduled_col]:
+            return "bunched"
+        elif row[actual_col] > 1.5 * row[scheduled_col]:
+            return "gapped"
+        else:
+            return "on-time"
+
+    df["status"] = df.apply(classify_row, axis=1)
+    return df
+
+
+# Example usage:
+# df = pd.DataFrame({'actual_headway': [...], 'scheduled_headway': [...]})
+# df = classify_headways(df, actual_col='actual_headway', scheduled_col='scheduled_headway')
